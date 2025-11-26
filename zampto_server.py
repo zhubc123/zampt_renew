@@ -17,7 +17,7 @@ import socket
 def signal_handler(sig, frame):
     print("\n捕捉到 Ctrl+C，正在退出...")
     # 这里可以添加清理逻辑，比如关闭文件、保存状态等
-    sys.exit(1)
+    exit(1)
 signal.signal(signal.SIGINT, signal_handler)
 #解析url中的id
 from urllib.parse import urlparse, parse_qs
@@ -71,6 +71,13 @@ tgbot_token = os.getenv("TG_TOKEN", "")
 user_id = os.getenv("TG_USERID", "")
 # 用来判断登录界面有没有被cf挡了
 login_deny=False
+# 全局常量
+signurl="https://auth.zampto.net/sign-in"
+signurl_end="auth.zampto.net/sign-in"
+homeurl="https://dash.zampto.net/homepage"
+homeurlend="/homepage"
+overviewurl="https://dash.zampto.net/overview"
+overviewurl_end="/overview"
 if chromepath:
     print(f"✅ 使用浏览器路径：{chromepath}")
 else:
@@ -109,9 +116,10 @@ def exit_process(num=0):
         if check_google() and tgbot_token and user_id :
             tg_notifacation(info)
     if iargs.keep:
-        if page.url.startswith("https://hosting.zampto.net/?page=server"):
-            page.get("https://hosting.zampto.net/?page=overview")
-            print("✅ 跳回overview页面。")
+        if 'page' in globals():
+            if page.url.startswith("https://hosting.zampto.net/?page=server"):
+                page.get("https://hosting.zampto.net/?page=overview")
+                print("✅ 跳回overview页面。")
         print("✅ 启用了 -k 参数，保留浏览器模式")
     else:
         std_logger.info("✅ 浏览器已关闭，避免进程驻留")
@@ -234,64 +242,43 @@ def attach_browser(port=9222):
         print(f"⚠️ 接管浏览器时出错：{e}")
         return None
 
+async def is_page_crashed(browser):
+    async def check_title():
+        page = browser.latest_tab
+        title = page.title
+        return 'Aw, Snap!' in title or '糟糕' in title
+    try:
+        crashed = await asyncio.wait_for(check_title(), timeout=5)
+        return crashed
+    except (TimeoutError, asyncio.TimeoutError):
+        return True
+    except Exception as e:
+        print(f'其他错误: {e}')
+        return False    
+
 async def dev_setup():
-    global options
-    global page,browser
-    user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
-    options = (
-        ChromiumOptions()
-        .incognito(True)
-        .set_user_agent(user_agent)
-        .set_argument('--guest')
-        .set_argument('--no-sandbox')
-        .set_argument('--disable-gpu')
-        .set_argument('--window-size=1280,800')
-        .set_argument('--remote-debugging-port=9222')
-        .set_browser_path(binpath)
-    )
-    
-    if 'DISPLAY' not in os.environ:
-        options.headless(True)
-        options.set_argument('--headless=new') 
-        std_logger.info("✅ DISPLAY环境变量为空，浏览器使用无头模式")
-    else:
-        options.headless(False)
-        std_logger.info("✅ DISPLAY环境变量存在，浏览器使用正常模式")
-    browser = attach_browser()
-    # if browser is None or not browser.alive:
-    #     # 接管失败，启动新浏览器
-    #     browser = Chromium(options)
-    # await test()
-    # page = browser.latest_tab
-    # exit_code=await continue_execution()
-    # await open_web()
-    # await solve_turnstile(std_logger)
-    # print(browser.tab_ids)
-    # browser.quit()
-    # print(f"browser{browser}")
-    # print(f"browser{browser.tabs_count}")
-    # try:
-        
-    #     print("成功获取页面对象")
-    # except asyncio.TimeoutError:
-    #     print("获取 latest_tab 超时，可能页面崩溃")
-    #     browser.new_tab('about:blank')
-        # browser.refresh()  # 或 
-        
-    
+    pass
 
 def inputauth(inpage):
-    u = inpage.ele('x://*[@id="email"]')
+    u = inpage.ele('x://*[@autocomplete="username email"]', timeout=30)
+    print(u.set.value)
+    if u.set.value:   # 如果不为空
+        u.clear(by_js=True)
     u.input(username)
-    p = inpage.ele('x://*[@id="password"]')
+    b= inpage.ele('x://button[normalize-space(.)="Sign in"]',timeout=30)
+    b.click(by_js=False)
+    p = inpage.ele('x://*[@type="password"]', timeout=30)
     p.input(password)
 
 
 def clickloginin(inpage):
-    c = inpage.ele('x://*[@id="loginButton"]', timeout=15)
+    c = inpage.ele('x://button[normalize-space(.)="Continue"]',timeout=30)
     xof = random.randint(1, 20)
     yof = random.randint(1, 10)
     c.offset(x=xof, y=yof).click(by_js=False)
+    skip = inpage.ele('x://div[@role="button" and normalize-space(.)="Skip"]',timeout=30)
+    if skip:
+        skip.click(by_js=False)
 
 
 def check_element(desc, element, exit_on_fail=True):
@@ -315,29 +302,6 @@ async def wait_for(a, b=None):
     await asyncio.sleep(wait_time)
     std_logger.debug(f"等待结束：{wait_time:.2f} 秒")
     
-async def solve_turnstile(logger: logging.Logger):
-    global options
-    global page
-    logger.debug('waiting for turnstile')
-    await wait_for(15,30)
-    inputauth(page)
-    div = page.ele('xpath://*[@id="loginForm"]/div[3]/div/div', timeout=15)
-    check_element('id=loginform', div)
-
-    iframe1 = div.shadow_root.get_frame(1)
-    check_element('iframe1', iframe1)
-
-    body = iframe1.ele('@tag()=body', timeout=15)
-    check_element('iframe-body', body)
-
-    checkbox = body.shadow_root.ele('x://label/input', timeout=30)
-    check_element('iframe1-body-checkbox', checkbox)
-    xof = random.randint(5, 8)
-    yof = random.randint(5, 8)
-    checkbox.offset(x=xof, y=yof).click(by_js=False)
-    std_logger.info(f"✅ 找到验证框，点击{checkbox}")
-    await wait_for(10,12)
-    capture_screenshot(f"cf_result.png")
 
 def click_if_cookie_option(tab):
     deny = tab.ele("x://button[@class='fc-button fc-cta-do-not-consent fc-secondary-button']", timeout=15)
@@ -355,13 +319,13 @@ def renew_server(tab):
 
 def check_renew_result(tab):
     global info
-    renew_notifacation = tab.ele('x:// *[ @ id = "renewalSuccess"] / div', timeout=15)
-    server_name_span = page.ele('x://*[@id="js-check"]/div[2]/div/div[1]/h1/span[2]', timeout=15)
-    if not server_name_span:
+    nextRenewalTime = tab.ele("x://span[@id='nextRenewalTime']", timeout=15)
+    server_name_span=tab.ele("x://span[contains(@class,'server-name')]", timeout=15)
+    if not nextRenewalTime:
         print("❌ [严重错误] 无法检查服务器存活时间状态，已终止程序执行！")
         error_exit(f'❌ [严重错误] 无法检查服务器存活时间状态，已终止程序执行！\n')
     server_name = server_name_span.inner_html
-    if renew_notifacation:
+    if server_name:
         info += f'✅ 服务器 [{server_name}] 续期成功\n'
         print(f'✅ 服务器 [{server_name}] 续期成功')
         sleep(5)
@@ -381,7 +345,7 @@ def report_left_time(server_name):
 @require_browser_alive
 async def open_server_tab():
     global std_logger
-    manage_server = page.eles("x://a[contains(@href, '?page=server')]", timeout=3)
+    manage_server = page.eles("x://a[contains(@href, 'server?id')]", timeout=3)
     std_logger.info(manage_server)
     std_logger.debug(f"url_now:{page.url}")
     server_list = []
@@ -400,68 +364,44 @@ async def open_server_tab():
         capture_screenshot(f"{ser_id}.png")
 
 @require_browser_alive
-async def hosting_login():
+async def open_overview():
     global std_logger
-    if page.url.startswith("https://accounts.zampto.net/"):
-        hosting = page.ele('x://button[contains(@onclick, "redirectTo(\'https://hosting.zampto.net/\')")]')
-        if hosting:
-            std_logger.info(f"找到hosting入口点击{hosting}")
-            hosting.click(by_js=False)
+    if page.url.startswith(homeurl):
+        overview = page.ele('x://a[normalize-space(span)="Servers Overview"]')
+        if overview:
+            std_logger.info(f"找到overview入口点击{overview}")
+            overview.click(by_js=False)
     else:
-        std_logger.error("没有在帐户主页找到hosting入口，回退到直接访问")
-        url = 'https://hosting.zampto.net/'
-        page.get(url)
+        std_logger.error("没有在帐户主页找到overview入口，回退到直接访问")
+        page.get(overviewurl)
     await wait_for(7,10)
-@require_browser_alive
-async def open_server_overview_page():
-    # if page.url.endswith("hosting.zampto.net/auth/") :
-    login_hosting= page.ele('x://*[@class="login-btn pulse"]', timeout=15)
-    if login_hosting:
-        std_logger.info(f"找到login_or_sign_with_zampto点击{login_hosting}")
-        xof = random.randint(20, 60)
-        yof = random.randint(5, 30)
-        login_hosting.offset(x=xof, y=yof).click(by_js=False)
-        await wait_for(10,15)
-    else:
-        std_logger.error("不能找到login_or_sign_with_zampto按钮,跳过")
-    # else:
-    #     std_logger.info("跳过hosting二阶段登录")
-
-    url = 'https://hosting.zampto.net/?page=overview'
-    page.get(url)
-    std_logger.info("等待cookie选项出现")
-    await wait_for(10,15)
-    click_if_cookie_option(page)
 
 @require_browser_alive
 async def login():
     global info,login_deny
-    if login_deny and page.url.endswith("accounts.zampto.net/auth"):
-        page.get("https://accounts.zampto.net/auth")
+    if login_deny and page.url.endswith(signurl_end):
+        page.get(signurl)
         login_deny=False
-        await wait_for(10,15)
-    await solve_turnstile(std_logger) 
-    await wait_for(2)
+        await wait_for(1)
+    inputauth(page)
     clickloginin(page)
     await wait_for(10,15)
-    if "/auth" in page.url:
-        msg = f"⚠️ {username}登录失败，请检查认证信息是否正确，若正确，可能是CF盾阻止了此IP访问，请尝试-r参数增加重试次数，或者尝试换一个的网络环境下执行"
+    if signurl_end in page.url:
+        msg = f"⚠️ {username}登录失败，请检查认证信息是否正确。"
         login_deny=True
         error_exit(msg)
     else:
         std_logger.info(f"{username}登录成功")
 @require_browser_alive
 async def open_web():
-    url = "https://accounts.zampto.net/auth"
-    if not page.url.startswith(url):
-        page.get(url)
-        await wait_for(20,35)
+    if not page.url.startswith(signurl):
+        page.get(signurl)
+        await wait_for(10,15)
 steps = [
     {"match": "/newtab/", "action": open_web, "name": "open_web"},
-    {"match": "accounts.zampto.net/auth", "action": login, "name": "account"},
-    {"match": "/?session_code=", "action": hosting_login, "name": "hosting_login"},
-    {"match": "hosting.zampto.net/auth", "action": open_server_overview_page, "name": "open_server_overview"},
-    {"match": "/?page=overview", "action": open_server_tab, "name": "open_server_tab"},
+    {"match": signurl_end, "action": login, "name": "account"},
+    {"match": homeurlend, "action": open_overview, "name": "open_overview"},
+    {"match": overviewurl_end, "action": open_server_tab, "name": "open_server_tab"},
 ]
 
 async def continue_execution(current_url: str = ""):
@@ -513,6 +453,7 @@ async def continue_execution(current_url: str = ""):
                 
         except Exception as e:
             std_logger.error(f"步骤 {step_name} 执行失败: {e}")
+            error_exit(f"步骤 {step_name} 执行失败: {e}")
             return 1
 
     std_logger.info("所有步骤执行完成")
@@ -521,7 +462,7 @@ async def continue_execution(current_url: str = ""):
 async def main():
     global std_logger,iargs
     exit_code=0
-    user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+    user_agent = "Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36"
     if iargs.debug:
         std_logger.info("DEBUG模式")
         await dev_setup()
