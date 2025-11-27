@@ -1,30 +1,4 @@
-## 2025年11月26号更新
-发现网站改版了，更新改版后代码。
-## 2025年11月15号更新
-新发现:cf盾过不过和user-agent有关系，但是不知道是不是所有环境下都是如此，
 
-不管怎么样，同一IP下如果正常情况下可以过CF盾，开启脚本后却过不了，请考虑替换user-agent。
-
-公开免费的获取user-agent的API:
-
-http://106.14.221.171:808/tUserAgent/getrandomua
-
-（注：网上公开收集，本人不为此API做任何保证）
-## 2025年11月9号更新
-- 增加cron镜像，可以长时间运行并托管在容器平台。只需要将docker标签从latest变成cron，如ghcr.io/liveqte/zampto_renew:cron。
-- 48小时定时自动续期。
-- 此镜像单独支持一个参数RETRY_ENABLED，设置为true后，当任务失败时，会间隔一小时再重试一次。默认不开启。
-- 支持日志跟踪，task.log会记录续期脚本详细日志。
-- 容器配置设置推荐:1G内存，0.5个CPU
-- 因为脚本会截图，有些平台会限制使用磁盘空间造成镜像重启，所以这样的平台就要挂载磁盘空间到/app下。
-## 2025年11月8号更新
-- 修复流程错误，争取网络环境允许的情况下一次尝试就成功。
-## 2025年11月3号更新
-- 增加 -k参数可以在执行完成后保留浏览器不关闭
-
-- 增加 -r参数可以指定失败时重试次数，如-r 3，总共尝试3次，如果第一次不成功还会尝试两次。
-
-- 使用状态机替换原先的执行逻辑。
 ## 使用方法
 克隆本项目到本地
 ```bash
@@ -56,11 +30,12 @@ docker run -itd \
   -e PASSWORD=pass \
   -e TG_TOKEN=token \
   -e TG_USERID=id \
+  -e CHROME_PROXY=socks5://127.0.0.1:1008 \
   zam_ser:alpine
 ```
 ### 从dokcer镜像
 ```bash
-docker run -itd -e USERNAME=a@abc.com -e PASSWORD=pass -e TG_TOKEN=token -e TG_USERID=id ghcr.io/liveqte/zampto_renew:latest
+docker run -itd -e USERNAME=a@abc.com -e PASSWORD=pass -e TG_TOKEN=token -e TG_USERID=id -e CHROME_PROXY=socks5://127.0.0.1:1008 ghcr.io/liveqte/zampto_renew:latest
 ```
 ## 环境变量说明
 | 变量名      | 示例值         | 说明                                         | 是否必填 |
@@ -69,15 +44,45 @@ docker run -itd -e USERNAME=a@abc.com -e PASSWORD=pass -e TG_TOKEN=token -e TG_U
 | `PASSWORD`  | `pass`         | 对应用户名的密码或访问令牌                   | ✅ 是      |
 | `TG_TOKEN`  | `token`        | Telegram Bot 的访问令牌，用于发送通知消息    | ❌ 否      |
 | `TG_USERID` | `id`           | Telegram 用户的 ID，Bot 将消息发送到该用户    | ❌ 否      |
+| `CHROME_PROXY` | `socks5://127.0.0.1:1080`| 浏览器使用的代理地址，http\socks4\socks5协议 | ❌ 否      |
 
 ## 捕捉图像
 运行脚本后，会在screenshots\下生成捕捉图像，可以校验结果。
+## 2025年11月27-28号更新
+增加CHROME_PROXY(可选)，可以选择使用代理进行登录续期,恢复github action进行续期操作。
+## 2025年11月26号更新
+发现网站改版了，更新改版后代码。
+## 2025年11月15号更新
+新发现:cf盾过不过和user-agent有关系，但是不知道是不是所有环境下都是如此，
+
+不管怎么样，同一IP下如果正常情况下可以过CF盾，开启脚本后却过不了，请考虑替换user-agent。
+
+公开免费的获取user-agent的API:
+
+http://106.14.221.171:808/tUserAgent/getrandomua
+
+（注：网上公开收集，本人不为此API做任何保证）
+## 2025年11月9号更新
+- 增加cron镜像，可以长时间运行并托管在容器平台。只需要将docker标签从latest变成cron，如ghcr.io/liveqte/zampto_renew:cron。
+- 48小时定时自动续期。
+- 此镜像单独支持一个参数RETRY_ENABLED，设置为true后，当任务失败时，会间隔一小时再重试一次。默认不开启。
+- 支持日志跟踪，task.log会记录续期脚本详细日志。
+- 容器配置设置推荐:1G内存，0.5个CPU
+- 因为脚本会截图，有些平台会限制使用磁盘空间造成镜像重启，所以这样的平台就要挂载磁盘空间到/app下。
+## 2025年11月8号更新
+- 修复流程错误，争取网络环境允许的情况下一次尝试就成功。
+## 2025年11月3号更新
+- 增加 -k参数可以在执行完成后保留浏览器不关闭
+
+- 增加 -r参数可以指定失败时重试次数，如-r 3，总共尝试3次，如果第一次不成功还会尝试两次。
+
+- 使用状态机替换原先的执行逻辑。
 
 ## 注意
 一、开发此工具时，我的账号可能因为多次登录，以及异地登录，已经被限制不可访问hosting服务，所以推荐只在固定IP使用，并且不要在短时间运行多次docker镜像。
 
 二、是否使用本工具的选择权在你手中，风险请自行承担。
 
-三、脚本靠模拟点击网页元素，有时效性，如果网页一直不改就能一直用，如果改了就不行了，~~我账号已经被限制，所以没有办法进行维护，后期如果有申请到新账号再说。~~ 新号已经下来，~~近期会更新Github action流程~~ 放弃，因为网络环境不符合登录条件。
+三、脚本靠模拟点击网页元素，有时效性，如果网页一直不改就能一直用，如果改了就不行了，~~我账号已经被限制，所以没有办法进行维护，后期如果有申请到新账号再说。~~ ~~新号已经下来，近期会更新Github action流程 放弃，因为网络环境不符合登录条件。~~
 
 四、账户登录我在idx网络环境/github action下失败，其他随便找一个游戏机的节点就能成功。

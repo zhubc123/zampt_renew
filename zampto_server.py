@@ -47,6 +47,29 @@ chrome_candidates = [
     "/run/host/usr/bin/microsoft-edge-stable"
 ]
 
+USER_AGENTS = [
+    # Windows Chrome
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+    # macOS Chrome
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+    # Windows Edge (Chromium)
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0",
+    # macOS Safari
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+    # iPhone Safari (iOS 17)
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+    # Android Chrome (Pixel 7 Pro)
+    "Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36",
+    # Android Chrome (generic)
+    "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Mobile Safari/537.36",
+    # Windows Firefox
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
+    # macOS Firefox
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0",
+    # Linux Chrome
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+]
+
 chromepath = next((path for path in chrome_candidates if os.path.exists(path)), None)
 # 配置标准 logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -69,7 +92,9 @@ info = ""
 # tg通知
 tgbot_token = os.getenv("TG_TOKEN", "")
 user_id = os.getenv("TG_USERID", "")
-# 用来判断登录界面有没有被cf挡了
+# chrome的代理
+chrome_proxy=os.getenv("CHROME_PROXY")
+# 用来判断登录是否成功
 login_deny=False
 # 全局常量
 signurl="https://auth.zampto.net/sign-in"
@@ -97,6 +122,33 @@ if not tgbot_token:
 if not user_id:
     print("⚠️ 环境变量 TG_USERID 未设置，Telegram 通知功能将无法使用。")
     print("💡 请使用 Docker 的 -e TG_USERID=your_user_id 传入。")
+
+def get_random_user_agent():
+    """随机返回一个 User-Agent 字符串"""
+    return random.choice(USER_AGENTS)
+
+def is_proxy_available(proxy_url: str, test_url: str = "http://www.google.com/generate_204", timeout: int = 5) -> bool:
+    """
+    使用 requests 检查代理是否可用
+    proxy_url: 例如 "socks5://127.0.0.1:1080"
+    test_url: 用来测试的目标网站 (默认使用 Google 的 204 检测地址)
+    timeout: 超时时间（秒）
+    """
+    proxies = {
+        "http": proxy_url,
+        "https": proxy_url
+    }
+    try:
+        resp = requests.get(test_url, proxies=proxies, timeout=timeout)
+        if resp.status_code == 204:
+            print(f"✅ 代理可用: {proxy_url}\n")
+            return True
+        else:
+            print(f"❌ 代理返回非预期状态码: {resp.status_code}\n")
+            return False
+    except Exception as e:
+        print(f"❌ 代理不可用: {e}\n")
+        return False
 
 def check_google():
     try:
@@ -207,6 +259,7 @@ def setup(user_agent: str, user_data_path: str = None):
         std_logger.info("✅ DISPLAY环境变量存在，浏览器使用正常模式")
     if user_data_path:
         options.set_user_data_path(user_data_path)
+    setup_proxy()
     # 创建 Chromium 浏览器对象
     browser = attach_browser()
     if browser is None or not browser.states.is_alive:
@@ -241,7 +294,16 @@ def attach_browser(port=9222):
     except Exception as e:
         print(f"⚠️ 接管浏览器时出错：{e}")
         return None
-
+def setup_proxy():
+    pava=is_proxy_available(chrome_proxy)
+    if chrome_proxy and pava:
+        print(f"✅ 代理可用，添加到启动参数: {chrome_proxy}")
+        options.set_argument(f'--proxy-server={chrome_proxy}')
+    elif chrome_proxy and not pava:
+        error_exit("❌ 指定代理不可用，为了保证账号安全退出不进入下一步操作。")
+    else:
+        print("未检测到可用代理，直接启动浏览器")
+        
 async def is_page_crashed(browser):
     async def check_title():
         page = browser.latest_tab
@@ -257,7 +319,64 @@ async def is_page_crashed(browser):
         return False    
 
 async def dev_setup():
-    pass
+    global options
+    global page,browser
+    user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+    # user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_0) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+    # user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0"
+    # user_agent = "Mozilla/5.0 (Linux; Android 13; Pixel 7 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Mobile Safari/537.36"
+    # user_agent = "Mozilla/5.0 (Linux; Android) AppleWebKit/537.36 (KHTML, like Gecko) Chrome Mobile Safari/537.36"
+
+
+    options = (
+        ChromiumOptions()
+        .incognito(True)
+        .set_user_agent(user_agent)
+        .set_argument('--guest')
+        .set_argument('--no-sandbox')
+        .set_argument('--disable-gpu')
+        .set_argument('--window-size=1280,720')
+        .set_argument('--remote-debugging-port=9222')
+        .set_browser_path(binpath)
+    )
+    
+    if 'DISPLAY' not in os.environ:
+        options.headless(True)
+        options.set_argument('--headless=new') 
+        std_logger.info("✅ DISPLAY环境变量为空，浏览器使用无头模式")
+    else:
+        options.headless(False)
+        std_logger.info("✅ DISPLAY环境变量存在，浏览器使用正常模式")
+    setup_proxy()
+    browser = attach_browser()
+    # print( browser.timeouts.base)
+    # print( browser.timeouts.page_load)
+    # print( browser.timeouts.script)
+    # browser.set.timeouts(base=5,page_load=5,script=5)
+
+
+    if browser is None or not browser.states.is_alive:
+        # 接管失败，启动新浏览器
+        browser = Chromium(options)
+    # await test()
+    page = browser.latest_tab
+    # exit_code=await continue_execution()
+    #1 await open_web()
+    #2 login()
+    #3 await open_overview()
+    # check_renew_result(page)
+    # print(browser.tab_ids)
+    # browser.quit()
+    # print(f"browser{browser}")
+    # print(f"browser{browser.tabs_count}")
+    # try:
+    #     print("成功获取页面对象")
+    # except asyncio.TimeoutError:
+    #     print("获取 latest_tab 超时，可能页面崩溃")
+    #     browser.new_tab('about:blank')
+        # browser.refresh()  # 或 
+        
+    
 
 def inputauth(inpage):
     u = inpage.ele('x://*[@autocomplete="username email"]', timeout=30)
@@ -468,7 +587,7 @@ async def main():
         await dev_setup()
         # exit_code=await continue_execution()
     else:
-        setup(user_agent)
+        setup(get_random_user_agent())
         try:
             exit_code=await continue_execution()
         except SystemExit as e:
