@@ -295,6 +295,7 @@ def attach_browser(port=9222):
         print(f"⚠️ 接管浏览器时出错：{e}")
         return None
 def setup_proxy():
+    global options
     pava=is_proxy_available(chrome_proxy)
     if chrome_proxy and pava:
         print(f"✅ 代理可用，添加到启动参数: {chrome_proxy}")
