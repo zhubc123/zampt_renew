@@ -464,7 +464,7 @@ def report_left_time(server_name):
 @require_browser_alive
 async def open_server_tab():
     global std_logger
-    manage_server = page.eles("x://a[contains(@href, 'server?id')]", timeout=3)
+    manage_server = page.eles("x://a[contains(@href, 'server?id')]", timeout=15)
     std_logger.info(manage_server)
     std_logger.debug(f"url_now:{page.url}")
     server_list = []
