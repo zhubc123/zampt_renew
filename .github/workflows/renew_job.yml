@@ -21,8 +21,7 @@ jobs:
           fi
           echo "✅ 账号信息已设置"
           if [ -z "${{ secrets.CHROME_PROXY }}" ]; then
-            echo "⚠️ CHROME_PROXY 未设置，将退出。"
-            exit 1
+            echo "⚠️ CHROME_PROXY 未设置"
           else
             echo "✅ CHROME_PROXY 已设置"
           fi
