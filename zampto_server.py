@@ -104,7 +104,7 @@ homeurlend="/homepage"
 overviewurl="https://dash.zampto.net/overview"
 overviewurl_end="/overview"
 if chromepath:
-    std_logger.info((f"✅ 使用浏览器路径：{chromepath}")
+    std_logger.info(f"✅ 使用浏览器路径：{chromepath}")
 else:
     error_exit("❌ 未找到可用的浏览器路径")
 print(username)
