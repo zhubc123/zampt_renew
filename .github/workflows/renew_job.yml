@@ -37,7 +37,9 @@ jobs:
             -v ${{ github.workspace }}/zampto_server.py:/app/zampto_server.py \
             -v ${{ github.workspace }}/requirements.txt:/app/requirements.txt \
             -v ${{ github.workspace }}/screenshots:/app/screenshots \
+            --shm-size=2g \
             ghcr.io/liveqte/zampto_renew:latest
+            /venv/bin/python zampto_server.py -r 3
 
       - name: 上传截图产物
         if: always()
