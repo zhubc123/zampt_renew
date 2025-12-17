@@ -48,6 +48,8 @@ docker run -itd -e USERNAME=a@abc.com -e PASSWORD=pass -e TG_TOKEN=token -e TG_U
 
 ## 捕捉图像
 运行脚本后，会在screenshots\下生成捕捉图像，可以校验结果。
+## 2025年12月17号更新
+- 工作流时间现在改为每天，因为续期会变成只能续两天。
 ## 2025年12月15号更新
 - 工作流使用的docker默认使用的64m的shm空间好像会让chrome在容器中崩溃，导致获取不到服务器列表，现在设置成2G，并且增加重试，提高成功率。
 ## 2025年12月14号更新
