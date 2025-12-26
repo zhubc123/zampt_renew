@@ -20,32 +20,9 @@ jobs:
       contents: read   # 推荐：允许读取仓库信息
 
     steps:
-      - name: Delete all workflow runs
-        env:
-          DRY_RUN: ${{ inputs.dry_run }}
-          GH_TOKEN: ${{ github.token }}  # 使用默认 token
-        run: |
-          echo "开始处理仓库 ${{ github.repository }} 的所有 workflow runs..."
-          if [ "$DRY_RUN" = "true" ]; then
-            echo "🚨 干跑模式（dry run）：仅列出将删除的 runs，不会实际删除。"
-          else
-            echo "⚠️  真实删除模式：将永久删除所有 runs！"
-          fi
-
-          # 分页获取所有 run ID（per_page=100，--paginate 自动处理多页）
-          gh api --paginate "/repos/${{ github.repository }}/actions/runs?per_page=100" \
-            --jq '.workflow_runs[].id' |
-          while read -r run_id; do
-            if [ -n "$run_id" ]; then
-              if [ "$DRY_RUN" = "true" ]; then
-                echo "模拟删除 run ID: $run_id"
-              else
-                echo "正在删除 run ID: $run_id"
-                gh api -X DELETE "/repos/${{ github.repository }}/actions/runs/$run_id"
-                # 可选：加延时避免 rate limit
-                # sleep 0.5
-              fi
-            fi
-          done
-
-          echo "完成！"
+      - name: Delete workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          retain_days: 0
+          keep_minimum_runs: 0
