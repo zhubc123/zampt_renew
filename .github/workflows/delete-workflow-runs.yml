@@ -1,37 +1,51 @@
-name: Delete All Workflow Runs
+name: Clear All Workflow Runs
 
 on:
-  workflow_dispatch:   # 手动触发
+  workflow_dispatch:  # 手动触发
+    inputs:
+      dry_run:
+        description: '是否仅模拟（不实际删除）？ true/false'
+        required: true
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
 
 jobs:
-  delete_runs:
+  delete-runs:
     runs-on: ubuntu-latest
-
     permissions:
-      actions: write   # 必须：允许删除 workflow 运行记录
+      actions: write  # 必需：允许删除 runs
+      contents: read   # 推荐：允许读取仓库信息
 
     steps:
       - name: Delete all workflow runs
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          GH_TOKEN: ${{ github.token }}  # 使用默认 token
         run: |
-          echo "开始删除所有 workflow 执行记录..."
+          echo "开始处理仓库 ${{ github.repository }} 的所有 workflow runs..."
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "🚨 干跑模式（dry run）：仅列出将删除的 runs，不会实际删除。"
+          else
+            echo "⚠️  真实删除模式：将永久删除所有 runs！"
+          fi
 
-          # 获取所有 workflow IDs
-          WORKFLOWS=$(gh api repos/${{ github.repository }}/actions/workflows --jq '.workflows[].id')
-
-          for WF_ID in $WORKFLOWS; do
-            echo "处理 workflow ID: $WF_ID"
-
-            # 获取该 workflow 的所有运行记录 ID
-            RUNS=$(gh api repos/${{ github.repository }}/actions/workflows/$WF_ID/runs --jq '.workflow_runs[].id')
-
-            for RUN_ID in $RUNS; do
-              echo "删除 run ID: $RUN_ID"
-              gh api \
-                --method DELETE \
-                repos/${{ github.repository }}/actions/runs/$RUN_ID
-            done
+          # 分页获取所有 run ID（per_page=100，--paginate 自动处理多页）
+          gh api --paginate "/repos/${{ github.repository }}/actions/runs?per_page=100" \
+            --jq '.workflow_runs[].id' |
+          while read -r run_id; do
+            if [ -n "$run_id" ]; then
+              if [ "$DRY_RUN" = "true" ]; then
+                echo "模拟删除 run ID: $run_id"
+              else
+                echo "正在删除 run ID: $run_id"
+                gh api -X DELETE "/repos/${{ github.repository }}/actions/runs/$run_id"
+                # 可选：加延时避免 rate limit
+                # sleep 0.5
+              fi
+            fi
           done
 
-          echo "所有 workflow 执行记录已删除完成。"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          echo "完成！"
