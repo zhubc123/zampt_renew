@@ -247,13 +247,26 @@ def capture_screenshot(file_name=None, save_dir='screenshots'):
 
 
 def tg_notifacation(meg):
+    global std_logger
     url = f"https://api.telegram.org/bot{tgbot_token}/sendMessage"
     payload = {
         "chat_id": user_id,
         "text": meg
     }
     response = requests.post(url, data=payload)
-    print(response.json())
+    if response.status_code != 200: 
+        std_logger.error("❌ HTTP 请求失败:", response.status_code, response.text) 
+        return False 
+    # 2. 检查 Telegram API 返回值 
+    result = response.json() 
+    if result.get("ok"): 
+        std_logger.info("✅ Telegram 发送成功") 
+        return True 
+    else: 
+        std_logger.error("❌ Telegram 返回错误:", result) 
+        return False
+    # print(response.json())为了账号安全，不直接返回json字符
+
 
 
 def setup(user_agent: str, user_data_path: str = None):
@@ -268,6 +281,7 @@ def setup(user_agent: str, user_data_path: str = None):
         .set_argument('--disable-gpu')
         .set_argument('--window-size=1280,800')
         .set_argument('--remote-debugging-port=9222')
+        .set_argument('--disable-dev-shm-usage')
         .set_browser_path(binpath)
     )
     if 'DISPLAY' not in os.environ:
@@ -387,7 +401,7 @@ async def dev_setup():
         browser = Chromium(options)
     # await test()
     page = browser.latest_tab
-
+    click_if_cookie_option(page)
     # exit_code=await continue_execution()
     # 1 await open_web()
     # 2 login()
@@ -459,46 +473,48 @@ def click_if_cookie_option(tab):
 
 
 def renew_server(tab):
+    global std_logger
     renewbutton = tab.ele("x://a[contains(@onclick, 'handleServerRenewal')]", timeout=15)
     if renewbutton:
-        print(f"找到{renewbutton}")
-        renewbutton.click(by_js=False)
+        std_logger.debug(f"找到renew按钮")
+        xof = random.randint(1, 20)
+        yof = random.randint(1, 10)
+        renewbutton.offset(x=xof, y=yof).click(by_js=False)
     else:
-        print("没找到renew按钮，无事发生")
-
+         std_logger.debug("没找到renew按钮，无事发生")
 
 def check_renew_result(tab):
-    global info
+    global info,std_logger
     nextRenewalTime = tab.ele("x://span[@id='nextRenewalTime']", timeout=15)
     server_name_span = tab.ele("x://span[contains(@class,'server-name')]", timeout=15)
     if not nextRenewalTime:
-        print("❌ [严重错误] 无法检查服务器存活时间状态，已终止程序执行！")
+        std_logger.error("❌ [严重错误] 无法检查服务器存活时间状态，已终止程序执行！")
         error_exit(f'❌ [严重错误] 无法检查服务器存活时间状态，已终止程序执行！\n')
     server_name = server_name_span.inner_html
     if server_name:
         info += f'✅ 服务器 [{server_name}] 续期成功\n'
-        print(f'✅ 服务器 [{server_name}] 续期成功')
+        std_logger.info(f'✅ 服务器续期成功')
         sleep(5)
         report_left_time(server_name)
     else:
-        print(f'❌ [服务器: {server_name}] 续期失败')
+        info +=f'❌ [服务器: {server_name}] 续期失败\n'
         report_left_time(server_name)
-        error_exit(f'❌ [服务器: {server_name}] 续期失败\n')
+        error_exit(f'❌ [服务器: 续期失败\n')
 
 
 def report_left_time(server_name):
-    global info
+    global info,std_logger
     left_time = page.ele('x://*[@id="nextRenewalTime"]', timeout=15)
     if left_time:
         info += f'🕒 [服务器: {server_name}] 存活期限：{left_time.inner_html}\n'
-        print(f'🕒 [服务器: {server_name}] 存活期限：{left_time.inner_html}')
+        std_logger.info(f'🕒 [服务器: tg上查看] 存活期限：{left_time.inner_html}')
 
 
 @require_browser_alive
 async def open_server_tab():
     global std_logger
     manage_server = page.eles("x://a[contains(@href, 'server?id')]", timeout=15)
-    std_logger.info(manage_server)
+    # std_logger.info(manage_server) 泄露账号信息所以注释
     std_logger.debug(f"url_now:{page.url}")
     server_list = []
     for a in manage_server:
@@ -506,7 +522,7 @@ async def open_server_tab():
     if not server_list:
         capture_screenshot(f"serverlist_overview.png")
         error_exit("⚠️ server_list 为空，跳过服务器续期流程")
-    std_logger.info(f"待续期服务器：{server_list}")
+    # std_logger.info(f"待续期服务器：{server_list}") 泄露账号信息所以注释
     for s in server_list:
         page.get(s)
         await asyncio.sleep(5)
@@ -527,8 +543,9 @@ async def open_overview():
     else:
         std_logger.error("没有在帐户主页找到overview入口，回退到直接访问")
         page.get(overviewurl)
+    std_logger.info("等待cookie选项出现")
     await wait_for(7, 10)
-
+    click_if_cookie_option(page)
 
 @require_browser_alive
 async def login():
@@ -545,7 +562,7 @@ async def login():
         login_deny = True
         error_exit(msg)
     else:
-        std_logger.info(f"{username}登录成功")
+        std_logger.info(f"登录成功")
 
 
 @require_browser_alive
@@ -561,6 +578,26 @@ steps = [
     {"match": homeurlend, "action": open_overview, "name": "open_overview"},
     {"match": overviewurl_end, "action": open_server_tab, "name": "open_server_tab"},
 ]
+
+from urllib.parse import urlparse
+
+def mask_url_domain_last8(url: str, keep: int = 8) -> str:
+    """
+    输出格式：域名/最后8字符/
+    例如：
+    https://example.com/path/to/abcdef123456 → https://example.com/123456/
+    """
+    if not url:
+        return "N/A"
+    parsed = urlparse(url)
+    # 域名部分（scheme + netloc）
+    domain = f"{parsed.scheme}://{parsed.netloc}"
+    # 取最后一个 / 后的部分
+    last_part = parsed.path.rsplit("/", 1)[-1]
+    # 只保留最后 keep 个字符
+    short_part = last_part[-keep:] if last_part else ""
+    return f"{domain}/{short_part}/"
+
 
 
 async def continue_execution(current_url: str = ""):
@@ -598,7 +635,8 @@ async def continue_execution(current_url: str = ""):
 
             std_logger.debug(f"步骤 {step_name} 执行完成")
             await wait_for(5, 7)
-            std_logger.debug(f"当前URL: {page.url if page else 'N/A'}")
+            masked = mask_url_domain_last8(page.url)
+            std_logger.debug(f"当前URL: {masked}")
 
             # 截图记录
             screenshot_name = f"{step_name}_{i}.png"
