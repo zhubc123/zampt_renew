@@ -184,7 +184,7 @@ def exit_process(num=0):
         info = f"ℹ️ Zampto服务器续期通知\n用户：{username}\n{info}"
         if check_google() and tgbot_token and user_id:
             tg_notifacation(info)
-    if iargs.keep:
+    if iargs.keep or iargs.retry > 0:
         if 'page' in globals():
             if page.url.startswith("https://dash.zampto.net/server?id="):
                 page.get(overviewurl)
@@ -603,6 +603,7 @@ def mask_url_domain_last8(url: str, keep: int = 8) -> str:
 async def continue_execution(current_url: str = ""):
     global page, std_logger
     url = current_url or (page.url if page else "")
+    url = mask_url_domain_last8(url)
     std_logger.debug(f"当前页面 URL: {url}")
     if not url:
         std_logger.warning("URL为空，无法确定当前步骤")
@@ -635,8 +636,7 @@ async def continue_execution(current_url: str = ""):
 
             std_logger.debug(f"步骤 {step_name} 执行完成")
             await wait_for(5, 7)
-            masked = mask_url_domain_last8(page.url)
-            std_logger.debug(f"当前URL: {masked}")
+            std_logger.debug(f"当前URL: {url}")
 
             # 截图记录
             screenshot_name = f"{step_name}_{i}.png"
