@@ -401,7 +401,8 @@ async def dev_setup():
         browser = Chromium(options)
     # await test()
     page = browser.latest_tab
-    click_if_cookie_option(page)
+    # click_if_cookie_option(page)
+    # renew_server(page)
     # exit_code=await continue_execution()
     # 1 await open_web()
     # 2 login()
@@ -477,19 +478,19 @@ def renew_server(tab):
     renewbutton = tab.ele("x://a[contains(@onclick, 'handleServerRenewal')]", timeout=15)
     if renewbutton:
         std_logger.debug(f"找到renew按钮")
-        xof = random.randint(1, 20)
-        yof = random.randint(1, 10)
+        xof = random.randint(5, 7)
+        yof = random.randint(4, 7)
         renewbutton.offset(x=xof, y=yof).click(by_js=False)
     else:
          std_logger.debug("没找到renew按钮，无事发生")
 
 def check_renew_result(tab):
     global info,std_logger
-    nextRenewalTime = tab.ele("x://span[@id='nextRenewalTime']", timeout=15)
+    # nextRenewalTime = tab.ele("x://span[@id='nextRenewalTime']", timeout=15)
     server_name_span = tab.ele("x://span[contains(@class,'server-name')]", timeout=15)
-    if not nextRenewalTime:
-        std_logger.error("❌ [严重错误] 无法检查服务器存活时间状态，已终止程序执行！")
-        error_exit(f'❌ [严重错误] 无法检查服务器存活时间状态，已终止程序执行！\n')
+    # if not nextRenewalTime:
+    #     std_logger.error("❌ [严重错误] 无法检查服务器存活时间状态，已终止程序执行！")
+    #     error_exit(f'❌ [严重错误] 无法检查服务器存活时间状态，已终止程序执行！\n')
     server_name = server_name_span.inner_html
     if server_name:
         info += f'✅ 服务器 [{server_name}] 续期成功\n'
@@ -522,7 +523,7 @@ async def open_server_tab():
     if not server_list:
         capture_screenshot(f"serverlist_overview.png")
         error_exit("⚠️ server_list 为空，跳过服务器续期流程")
-    # std_logger.info(f"待续期服务器：{server_list}") 泄露账号信息所以注释
+    # std_logger.info(f"待续期服务器：{server_list}") #泄露账号信息所以注释
     for s in server_list:
         page.get(s)
         await asyncio.sleep(5)
@@ -602,8 +603,7 @@ def mask_url_domain_last8(url: str, keep: int = 8) -> str:
 
 async def continue_execution(current_url: str = ""):
     global page, std_logger
-    url = current_url or (page.url if page else "")
-    url = mask_url_domain_last8(url)
+    url = mask_url_domain_last8(page.url)
     std_logger.debug(f"当前页面 URL: {url}")
     if not url:
         std_logger.warning("URL为空，无法确定当前步骤")
