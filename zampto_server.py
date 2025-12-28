@@ -604,6 +604,7 @@ def mask_url_domain_last8(url: str, keep: int = 8) -> str:
 async def continue_execution(current_url: str = ""):
     global page, std_logger
     url = mask_url_domain_last8(page.url)
+    realurl=page.url
     std_logger.debug(f"当前页面 URL: {url}")
     if not url:
         std_logger.warning("URL为空，无法确定当前步骤")
@@ -613,7 +614,7 @@ async def continue_execution(current_url: str = ""):
     current_step_name = "unknown"
 
     for i, step in enumerate(steps):
-        if step["match"] in url:
+        if step["match"] in realurl:
             start_index = i
             current_step_name = step.get("name", f"step_{i}")
             std_logger.info(f"检测到当前步骤: {current_step_name}")
