@@ -401,6 +401,8 @@ async def dev_setup():
         browser = Chromium(options)
     # await test()
     page = browser.latest_tab
+
+    await open_server_tab()
     # click_if_cookie_option(page)
     # renew_server(page)
     # exit_code=await continue_execution()
@@ -478,9 +480,7 @@ def renew_server(tab):
     renewbutton = tab.ele("x://a[contains(@onclick, 'handleServerRenewal')]", timeout=15)
     if renewbutton:
         std_logger.debug(f"找到renew按钮")
-        xof = random.randint(5, 7)
-        yof = random.randint(4, 7)
-        renewbutton.offset(x=xof, y=yof).click(by_js=False)
+        renewbutton.click(by_js=False)
     else:
          std_logger.debug("没找到renew按钮，无事发生")
 
@@ -525,8 +525,7 @@ async def open_server_tab():
         error_exit("⚠️ server_list 为空，跳过服务器续期流程")
     # std_logger.info(f"待续期服务器：{server_list}") #泄露账号信息所以注释
     for s in server_list:
-        page.get(s)
-        await asyncio.sleep(5)
+        page.get(s, retry=3, interval=3, timeout=10)
         renew_server(page)
         check_renew_result(page)
         ser_id = get_id_from_url(s)
@@ -614,6 +613,8 @@ async def continue_execution(current_url: str = ""):
     current_step_name = "unknown"
 
     for i, step in enumerate(steps):
+        print(realurl)
+        print(step["match"])
         if step["match"] in realurl:
             start_index = i
             current_step_name = step.get("name", f"step_{i}")
